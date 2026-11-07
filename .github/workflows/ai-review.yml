@@ -34,7 +34,8 @@ jobs:
 
       - name: AI review comment (only if gate failed)
         if: steps.tests.outcome == 'failure'
-        timeout-minutes: 3
+        timeout-minutes: 5
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

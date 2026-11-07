@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -21,5 +23,24 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run tests with coverage gate
-        run: pytest --cov=app --cov-fail-under=80
+      - name: Run tests with coverage
+        id: tests
+        continue-on-error: true
+        run: pytest --cov=app --cov-report=xml --cov-fail-under=80
+
+      - name: SonarQube Cloud scan
+        uses: SonarSource/sonarqube-scan-action@v6
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: SonarQube Quality Gate check
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Fail if tests or coverage gate failed
+        if: steps.tests.outcome == 'failure'
+        run: |
+          echo "Tests or coverage gate failed"
+          exit 1

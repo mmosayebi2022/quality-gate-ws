@@ -35,7 +35,7 @@ def build_prompt(diff, test_output):
     return (
         "You are a senior code reviewer in a CI pipeline.\n"
         "A pull request FAILED the quality gate. Explain to a student, "
-        "in simple Persian, why it failed and how to fix it.\n"
+        "in simple English, why it failed and how to fix it.\n"
         "Use this format:\n"
         "1. Why the gate failed (1-2 sentences)\n"
         "2. Which functions or lines are the problem\n"

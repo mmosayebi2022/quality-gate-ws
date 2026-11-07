@@ -6,10 +6,11 @@ import time
 import urllib.error
 import urllib.request
 
-MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-latest"]
+MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-lite-latest", "gemini-flash-latest"]
 API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 MAX_CHARS = 12000
 ATTEMPTS_PER_MODEL = 2
+DEADLINE_SECONDS = 150  # stop trying after this many seconds
 
 
 def read_file(path):
@@ -49,17 +50,17 @@ def call_model(model, prompt):
     url = f"{API_BASE}/{model}:generateContent"
     body = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": 2048},
+        "generationConfig": {"maxOutputTokens": 4096},
     }).encode()
     req = urllib.request.Request(
         url,
         data=body,
         headers={
             "Content-Type": "application/json",
-            "x-goog-api-key": os.environ["GEMINI_API_KEY"],
+            "x-goog-api-key": os.environ.get("GEMINI_API_KEY", ""),
         },
     )
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    with urllib.request.urlopen(req, timeout=30) as resp:
         status = resp.status
         raw = resp.read().decode("utf-8", errors="replace")
     print(f"[{model}] HTTP {status}, body length {len(raw)}")
@@ -77,9 +78,12 @@ def call_model(model, prompt):
     return text
 
 
-def ask_model(prompt):
+def ask_model(prompt, start):
     for model in MODELS:
         for attempt in range(1, ATTEMPTS_PER_MODEL + 1):
+            if time.time() - start > DEADLINE_SECONDS:
+                print("Deadline reached, giving up on AI.")
+                return None
             try:
                 print(f"Trying {model} (attempt {attempt})")
                 return call_model(model, prompt)
@@ -88,7 +92,7 @@ def ask_model(prompt):
                 print(f"[{model}] HTTP error {e.code}: {detail}")
                 if e.code in (400, 401, 403, 404):
                     break  # retrying will not help for this model
-                if e.code == 429:
+                if e.code in (429, 500, 503):
                     time.sleep(10)
             except Exception as e:
                 print(f"[{model}] failed: {type(e).__name__}: {e}")
@@ -114,14 +118,33 @@ def post_comment(text):
 
 
 def main():
-    diff = get_diff()
+    start = time.time()
     test_output = read_file("test_output.txt")
-    review = ask_model(build_prompt(diff, test_output))
+    try:
+        diff = get_diff()
+    except Exception as e:
+        print(f"Could not read diff: {type(e).__name__}: {e}")
+        diff = "(diff unavailable)"
+
+    review = ask_model(build_prompt(diff, test_output), start)
+
     if review is None:
-        print("AI model did not answer. See messages above.")
-        sys.exit(1)
-    post_comment("## 🤖 AI Review\n\n" + review)
-    print("Comment posted.")
+        tail = "\n".join(test_output.strip().splitlines()[-25:])
+        body = (
+            "## 🤖 AI Review\n\n"
+            "سرویس هوش مصنوعی در این اجرا پاسخ نداد. خلاصه خروجی تست:\n\n"
+            "```\n" + tail + "\n```"
+        )
+    else:
+        body = "## 🤖 AI Review\n\n" + review
+
+    try:
+        post_comment(body)
+        print("Comment posted.")
+    except Exception as e:
+        print(f"Could not post comment: {type(e).__name__}: {e}")
+
+    sys.exit(0)  # this check must never turn red
 
 
 if __name__ == "__main__":

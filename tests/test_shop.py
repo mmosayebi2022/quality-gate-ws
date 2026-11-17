@@ -13,3 +13,11 @@ def test_apply_discount():
 def test_apply_discount_invalid_percent():
     with pytest.raises(ValueError):
         apply_discount(100, 150)
+
+
+def test_calculate_tax():
+    from app.shop import calculate_tax
+    assert calculate_tax(100, "DE", True, True) == 0
+    assert calculate_tax(100, "DE", False, False) == 19.0
+    assert calculate_tax(100, "FR", True, False) == 20.0
+    assert calculate_tax(100, "US", False, False) == 10.0
